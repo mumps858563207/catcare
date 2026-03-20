@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Quicksand", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Libre Baskerville", serif;
+  
+  --color-brand-cream: #FDFBF7;
+  --color-brand-peach: #FFE5D9;
+  --color-brand-sage: #B7B7A4;
+  --color-brand-orange: #FF8C42;
+  --color-brand-ink: #2D2D2D;
+}
+
+@layer base {
+  body {
+    @apply font-serif text-brand-ink bg-brand-cream;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans font-bold;
+  }
+}
+
+.rounded-brand {
+  border-radius: 15px;
+}
