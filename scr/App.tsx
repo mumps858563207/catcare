@@ -272,7 +272,7 @@ function AppContent() {
           >
             <div className="aspect-[4/5] rounded-brand overflow-hidden shadow-2xl relative z-10">
               <img 
-                src="https://picsum.photos/seed/cat-play/800/1000" 
+                src="https://mumpsaiweb.zeabur.app/wp-content/uploads/2026/03/Gemini_Generated_Image_iq1hbkiq1hbkiq1h.png" 
                 alt="Happy cat playing" 
                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
                 referrerPolicy="no-referrer"
