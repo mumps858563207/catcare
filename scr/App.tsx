@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Heart, 
@@ -16,9 +16,81 @@ import {
   Cat, 
   Sparkles,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
+import { db, collection, onSnapshot, query, orderBy } from './firebase';
+
+// Error Boundary Component
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-brand-cream p-6">
+          <div className="bg-white p-8 rounded-brand shadow-xl max-w-md w-full text-center border-t-4 border-brand-orange">
+            <AlertCircle size={48} className="text-brand-orange mx-auto mb-4" />
+            <h2 className="text-2xl font-sans font-bold mb-4 text-brand-ink">哎呀！出錯了</h2>
+            <p className="text-gray-600 mb-6">
+              應用程式發生了一些問題。請嘗試重新整理頁面。
+            </p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-brand-orange text-white px-6 py-2 rounded-brand font-bold hover:shadow-lg transition-all"
+            >
+              重新整理
+            </button>
+            {process.env.NODE_ENV === 'development' && (
+              <pre className="mt-6 p-4 bg-gray-100 rounded text-left text-xs overflow-auto max-h-40">
+                {this.state.error?.message}
+              </pre>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Firestore Error Handler
+enum OperationType {
+  GET = 'get',
+  WRITE = 'write',
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 // Initialize Gemini for the "Automation" demo
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
@@ -32,14 +104,70 @@ const COLORS = {
 };
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [academyArticles, setAcademyArticles] = useState<any[]>([]);
+  const [loadingArticles, setLoadingArticles] = useState(true);
+
+  const DEFAULT_ARTICLES = [
+    { tag: "健康", title: "貓咪換季掉毛怎麼辦？五個居家護理小撇步", image: "https://picsum.photos/seed/cat-care-1/400/300", description: "換季護理指南", link: "#" },
+    { tag: "行為", title: "為什麼貓咪喜歡推倒桌上的東西？專家解密", image: "https://picsum.photos/seed/cat-care-2/400/300", description: "行為學解析", link: "#" },
+    { tag: "飲食", title: "全濕食還是半濕食？找出最適合你家貓咪的方案", image: "https://picsum.photos/seed/cat-care-3/400/300", description: "營養學建議", link: "#" },
+    { tag: "環境", title: "小坪數也能打造貓咪天堂：垂直空間利用指南", image: "https://picsum.photos/seed/cat-care-4/400/300", description: "空間設計靈感", link: "#" }
+  ];
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    const fetchWordPressPosts = async () => {
+      try {
+        // 1. 先找出「小學堂」這個分類的 ID
+        const catResponse = await fetch('https://mumpsaiweb.zeabur.app/wp-json/wp/v2/categories?search=小學堂');
+        const categories = await catResponse.json();
+        
+        // 找到名稱完全匹配的分類，如果找不到則不帶分類過濾
+        const academyCat = categories.find((c: any) => c.name === '小學堂');
+        const catParam = academyCat ? `&categories=${academyCat.id}` : '';
+
+        // 2. 抓取該分類的最新 4 篇文章
+        const response = await fetch(`https://mumpsaiweb.zeabur.app/wp-json/wp/v2/posts?_embed&per_page=4${catParam}`);
+        if (!response.ok) throw new Error('WordPress API 請求失敗');
+        
+        const data = await response.json();
+        
+        const formattedPosts = data.map((post: any) => ({
+          id: post.id,
+          title: post.title.rendered,
+          tag: post._embedded?.['wp:term']?.[0]?.[0]?.name || '小學堂',
+          description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 50) + '...',
+          image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || `https://picsum.photos/seed/wp-${post.id}/400/300`,
+          link: post.link
+        }));
+        
+        setAcademyArticles(formattedPosts);
+        setLoadingArticles(false);
+      } catch (error) {
+        console.error('WordPress Fetch Error:', error);
+        setLoadingArticles(false);
+      }
+    };
+
+    fetchWordPressPosts();
+  }, []);
+
+  const displayArticles = academyArticles.length > 0 ? academyArticles : DEFAULT_ARTICLES;
 
   return (
     <div className="min-h-screen bg-brand-cream font-serif selection:bg-brand-peach selection:text-brand-ink">
@@ -319,15 +447,16 @@ export default function App() {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { tag: "健康", title: "貓咪換季掉毛怎麼辦？五個居家護理小撇步" },
-              { tag: "行為", title: "為什麼貓咪喜歡推倒桌上的東西？專家解密" },
-              { tag: "飲食", title: "全濕食還是半濕食？找出最適合你家貓咪的方案" },
-              { tag: "環境", title: "小坪數也能打造貓咪天堂：垂直空間利用指南" }
-            ].map((post, idx) => (
-              <div key={idx} className="p-8 bg-white rounded-brand shadow-sm hover:shadow-md transition-all cursor-pointer group border border-transparent hover:border-brand-peach">
+            {displayArticles.map((post, idx) => (
+              <a 
+                key={post.id || idx} 
+                href={post.link || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-8 bg-white rounded-brand shadow-sm hover:shadow-md transition-all cursor-pointer group border border-transparent hover:border-brand-peach"
+              >
                 <span className="text-[10px] font-sans font-bold text-brand-sage uppercase tracking-widest mb-4 block">
-                  {post.tag}
+                  {post.tag || post.category}
                 </span>
                 <h4 className="text-lg font-sans font-bold leading-tight group-hover:text-brand-orange transition-colors">
                   {post.title}
@@ -335,7 +464,7 @@ export default function App() {
                 <div className="mt-6 flex items-center text-xs font-sans font-bold text-gray-400 group-hover:text-brand-ink transition-colors">
                   閱讀全文 <ChevronRight size={14} />
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
