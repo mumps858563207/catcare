@@ -1,0 +1,70 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: academy_articles
+    // Document ID: auto-generated
+    // Fields:
+    //   - title: string (required) - The title of the article.
+    //   - category: string (required) - The category of the article.
+    //   - description: string (required) - A brief description.
+    //   - image: string (required) - The image URL.
+    //   - link: string (required) - The link to the full article.
+    //   - createdAt: timestamp (optional) - The creation time.
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - role: string - 'admin' or 'user'
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "mumps2605@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidArticle(data) {
+      return data.keys().hasAll(['title', 'category', 'description', 'image', 'link']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.category is string && data.category.size() > 0 && data.category.size() < 50 &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 1000 &&
+             data.image is string && data.image.size() > 0 && data.image.size() < 1000 &&
+             data.link is string && data.link.size() > 0 && data.link.size() < 1000 &&
+             (!('createdAt' in data) || data.createdAt is string || data.createdAt is timestamp);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /academy_articles/{articleId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidArticle(request.resource.data);
+      allow update: if isAuthenticated() && isValidArticle(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAdmin();
+    }
+    
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

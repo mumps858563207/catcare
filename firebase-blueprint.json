@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "AcademyArticle": {
+      "title": "Academy Article",
+      "description": "An article for the Cat Academy section.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the article."
+        },
+        "category": {
+          "type": "string",
+          "description": "The category of the article (e.g., 飲食健康)."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the article."
+        },
+        "image": {
+          "type": "string",
+          "description": "The image URL for the article."
+        },
+        "link": {
+          "type": "string",
+          "description": "The link to the full article."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The creation time of the article."
+        }
+      },
+      "required": ["title", "category", "description", "image", "link"]
+    }
+  },
+  "firestore": {
+    "/academy_articles": {
+      "schema": "AcademyArticle",
+      "description": "Collection of articles for the Cat Academy section."
+    }
+  }
+}
