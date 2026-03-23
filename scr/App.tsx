@@ -1,7 +1,3 @@
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -126,8 +122,20 @@ function AppContent() {
   ];
 
   const DEFAULT_REVIEWS = [
-    { tag: "熱門測評", title: "2024 年度最佳互動式貓抓板：材質與耐用度深度解析", image: "https://picsum.photos/seed/cat-toy-1/800/450", description: "我們測試了市面上 15 款熱銷貓抓板，從紙質密度到膠水安全性，為你找出 CP 值最高的那一款...", link: "#" },
-    { tag: "行為學專欄", title: "如何挑選適合「高敏感貓」的躲藏空間？", image: "https://picsum.photos/seed/cat-toy-2/800/450", description: "高敏感貓咪需要更強的安全感。本文將教你如何從材質、開口方向與高度來挑選貓窩...", link: "#" }
+    { 
+      tag: "熱門測評", 
+      title: "Furbo 360° Dog Camera 深度評測：2026 實測優缺點與避坑指南", 
+      image: "https://m.media-amazon.com/images/I/71TNkx-2eeL._AC_UL320_.jpg", 
+      description: "這款專為寵物設計的攝影機真的好用嗎？我們針對連線穩定度、夜視功能以及丟零食互動進行了為期一個月的實測...", 
+      link: "https://mumpsaiweb.zeabur.app/furbo-360-dog-camera-%e6%b7%b1%e5%ba%a6%e8%a9%95%e6%b8%ac/" 
+    },
+    { 
+      tag: "專業測評", 
+      title: "Roborock S8 Pro Ultra 掃地機器人 深度評測：2026 實測優缺點與避坑指南", 
+      image: "https://picsum.photos/seed/review-2/800/450", 
+      description: "家有毛小孩，掃地機器人是必備嗎？Roborock S8 Pro Ultra 的自動清洗與烘乾功能是否能應對貓毛大軍？", 
+      link: "https://mumpsaiweb.zeabur.app/roborock-s8-pro-ultra-%e6%8e%83%e5%9c%b0%e6%a9%9f%e5%99%a8%e4%ba%ba-%e6%b7%b1%e5%ba%a6%e8%a9%95%e6%b8%ac/" 
+    }
   ];
 
   useEffect(() => {
@@ -135,6 +143,14 @@ function AppContent() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // 輔助函數：從 HTML 內容中抓取第一張圖片的 URL
+  const getFirstImageFromContent = (html: string) => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    const img = div.querySelector('img');
+    return img ? img.src : null;
+  };
 
   useEffect(() => {
     const fetchWordPressData = async () => {
@@ -159,7 +175,7 @@ function AppContent() {
                 title: post.title.rendered,
                 tag: '小學堂',
                 description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 50) + '...',
-                image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || `https://picsum.photos/seed/wp-${post.id}/400/300`,
+                image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || getFirstImageFromContent(post.content.rendered) || `https://picsum.photos/seed/wp-${post.id}/400/300`,
                 link: post.link
               })));
             }
@@ -178,7 +194,7 @@ function AppContent() {
                 title: post.title.rendered,
                 tag: '專業測評',
                 description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 100) + '...',
-                image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || `https://picsum.photos/seed/review-${post.id}/800/450`,
+                image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || getFirstImageFromContent(post.content.rendered) || `https://picsum.photos/seed/review-${post.id}/800/450`,
                 link: post.link
               })));
             }
