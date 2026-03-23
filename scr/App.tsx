@@ -109,6 +109,34 @@ export default function App() {
 function AppContent() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  // 輔助函數：從 HTML 內容中抓取第一張圖片的 URL (方案二強化版)
+  const getFirstImageFromContent = (html: string) => {
+    if (!html || typeof document === 'undefined') return null;
+    
+    try {
+      // 1. 嘗試使用 DOM 解析器尋找 <img> 標籤
+      const div = document.createElement('div');
+      div.innerHTML = html;
+      const img = div.querySelector('img');
+      // 過濾掉 WordPress 的 Emoji 圖片
+      if (img && img.src && !img.src.includes('s.w.org/images/core/emoji')) {
+        return img.src;
+      }
+    } catch (e) {}
+
+    // 2. 正則表達式備案：尋找 <img> src 屬性
+    const imgTagRegex = /<img[^>]+src="([^">]+)"/i;
+    const tagMatch = html.match(imgTagRegex);
+    if (tagMatch && tagMatch[1]) return tagMatch[1];
+
+    // 3. 正則表達式備案：尋找內文中的原始圖片網址 (例如直接貼上的 Amazon 連結)
+    const rawUrlRegex = /(https?:\/\/[^\s"']+\.(?:jpg|jpeg|gif|png|webp|svg|avif))/i;
+    const urlMatch = html.match(rawUrlRegex);
+    if (urlMatch && urlMatch[1]) return urlMatch[1];
+
+    return null;
+  };
+
   const [academyArticles, setAcademyArticles] = useState<any[]>([]);
   const [reviewArticles, setReviewArticles] = useState<any[]>([]);
   const [loadingArticles, setLoadingArticles] = useState(true);
@@ -144,76 +172,68 @@ function AppContent() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 輔助函數：從 HTML 內容中抓取第一張圖片的 URL
-  const getFirstImageFromContent = (html: string) => {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    const img = div.querySelector('img');
-    return img ? img.src : null;
-  };
-
   useEffect(() => {
     const fetchWordPressData = async () => {
       try {
-        // 1. 同時抓取所有分類
         const catResponse = await fetch('https://mumpsaiweb.zeabur.app/wp-json/wp/v2/categories?per_page=100');
         if (!catResponse.ok) throw new Error('無法取得分類資訊');
         const categories = await catResponse.json();
         
-        // 尋找分類
         const academyCat = categories.find((c: any) => c.name.includes('小學堂') || c.slug.includes('小學堂'));
         const reviewCat = categories.find((c: any) => c.name.includes('專業測評') || c.slug.includes('專業測評'));
 
-        // 2. 抓取小學堂文章
         if (academyCat) {
           const res = await fetch(`https://mumpsaiweb.zeabur.app/wp-json/wp/v2/posts?_embed&per_page=4&categories=${academyCat.id}&status=publish`);
           if (res.ok) {
             const data = await res.json();
             if (data.length > 0) {
-              setAcademyArticles(data.map((post: any) => ({
-                id: post.id,
-                title: post.title.rendered,
-                tag: '小學堂',
-                description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 50) + '...',
-                image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || getFirstImageFromContent(post.content.rendered) || `https://picsum.photos/seed/wp-${post.id}/400/300`,
-                link: post.link
-              })));
+              setAcademyArticles(data.map((post: any) => {
+                const contentImg = getFirstImageFromContent(post.content.rendered) || getFirstImageFromContent(post.excerpt.rendered);
+                return {
+                  id: post.id,
+                  title: post.title.rendered,
+                  tag: '小學堂',
+                  description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 50) + '...',
+                  image: contentImg || post._embedded?.['wp:featuredmedia']?.[0]?.source_url || `https://picsum.photos/seed/wp-${post.id}/400/300`,
+                  link: post.link
+                };
+              }));
             }
           }
         }
         setLoadingArticles(false);
 
-        // 3. 抓取專業測評文章
         if (reviewCat) {
           const res = await fetch(`https://mumpsaiweb.zeabur.app/wp-json/wp/v2/posts?_embed&per_page=2&categories=${reviewCat.id}&status=publish`);
           if (res.ok) {
             const data = await res.json();
             if (data.length > 0) {
-              setReviewArticles(data.map((post: any) => ({
-                id: post.id,
-                title: post.title.rendered,
-                tag: '專業測評',
-                description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 100) + '...',
-                image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || getFirstImageFromContent(post.content.rendered) || `https://picsum.photos/seed/review-${post.id}/800/450`,
-                link: post.link
-              })));
+              setReviewArticles(data.map((post: any) => {
+                const contentImg = getFirstImageFromContent(post.content.rendered) || getFirstImageFromContent(post.excerpt.rendered);
+                return {
+                  id: post.id,
+                  title: post.title.rendered,
+                  tag: '專業測評',
+                  description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 100) + '...',
+                  image: contentImg || post._embedded?.['wp:featuredmedia']?.[0]?.source_url || `https://picsum.photos/seed/review-${post.id}/800/450`,
+                  link: post.link
+                };
+              }));
             }
           }
         }
         setLoadingReviews(false);
-
       } catch (error) {
         console.error('WordPress Fetch Error:', error);
         setLoadingArticles(false);
         setLoadingReviews(false);
       }
     };
-
     fetchWordPressData();
   }, []);
 
-  const displayArticles = academyArticles.length > 0 ? academyArticles : DEFAULT_ARTICLES;
-  const displayReviews = reviewArticles.length > 0 ? reviewArticles : DEFAULT_REVIEWS;
+  const displayArticles = academyArticles.length > 0 ? academyArticles : (loadingArticles ? [] : DEFAULT_ARTICLES);
+  const displayReviews = reviewArticles.length > 0 ? reviewArticles : (loadingReviews ? [] : DEFAULT_REVIEWS);
 
   return (
     <div className="min-h-screen bg-brand-cream font-serif selection:bg-brand-peach selection:text-brand-ink">
@@ -397,7 +417,7 @@ function AppContent() {
               </p>
             </div>
             <a 
-              href="https://mumpsaiweb.zeabur.app/category/" 
+              href="https://mumpsaiweb.zeabur.app/category/%e5%b0%88%e6%a5%ad%e6%b8%ac%e8%a9%95/" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-brand-orange font-sans font-bold flex items-center gap-2 hover:gap-4 transition-all"
