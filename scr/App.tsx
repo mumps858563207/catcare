@@ -1,4 +1,3 @@
-/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -115,13 +114,20 @@ function AppContent() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [academyArticles, setAcademyArticles] = useState<any[]>([]);
+  const [reviewArticles, setReviewArticles] = useState<any[]>([]);
   const [loadingArticles, setLoadingArticles] = useState(true);
+  const [loadingReviews, setLoadingReviews] = useState(true);
 
   const DEFAULT_ARTICLES = [
     { tag: "健康", title: "貓咪換季掉毛怎麼辦？五個居家護理小撇步", image: "https://picsum.photos/seed/cat-care-1/400/300", description: "換季護理指南", link: "#" },
     { tag: "行為", title: "為什麼貓咪喜歡推倒桌上的東西？專家解密", image: "https://picsum.photos/seed/cat-care-2/400/300", description: "行為學解析", link: "#" },
     { tag: "飲食", title: "全濕食還是半濕食？找出最適合你家貓咪的方案", image: "https://picsum.photos/seed/cat-care-3/400/300", description: "營養學建議", link: "#" },
     { tag: "環境", title: "小坪數也能打造貓咪天堂：垂直空間利用指南", image: "https://picsum.photos/seed/cat-care-4/400/300", description: "空間設計靈感", link: "#" }
+  ];
+
+  const DEFAULT_REVIEWS = [
+    { tag: "熱門測評", title: "2024 年度最佳互動式貓抓板：材質與耐用度深度解析", image: "https://picsum.photos/seed/cat-toy-1/800/450", description: "我們測試了市面上 15 款熱銷貓抓板，從紙質密度到膠水安全性，為你找出 CP 值最高的那一款...", link: "#" },
+    { tag: "行為學專欄", title: "如何挑選適合「高敏感貓」的躲藏空間？", image: "https://picsum.photos/seed/cat-toy-2/800/450", description: "高敏感貓咪需要更強的安全感。本文將教你如何從材質、開口方向與高度來挑選貓窩...", link: "#" }
   ];
 
   useEffect(() => {
@@ -131,43 +137,67 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    const fetchWordPressPosts = async () => {
+    const fetchWordPressData = async () => {
       try {
-        // 1. 先找出「小學堂」這個分類的 ID
-        const catResponse = await fetch('https://mumpsaiweb.zeabur.app/wp-json/wp/v2/categories?search=小學堂');
+        // 1. 同時抓取所有分類
+        const catResponse = await fetch('https://mumpsaiweb.zeabur.app/wp-json/wp/v2/categories?per_page=100');
+        if (!catResponse.ok) throw new Error('無法取得分類資訊');
         const categories = await catResponse.json();
         
-        // 找到名稱完全匹配的分類，如果找不到則不帶分類過濾
-        const academyCat = categories.find((c: any) => c.name === '小學堂');
-        const catParam = academyCat ? `&categories=${academyCat.id}` : '';
+        // 尋找分類
+        const academyCat = categories.find((c: any) => c.name.includes('小學堂') || c.slug.includes('小學堂'));
+        const reviewCat = categories.find((c: any) => c.name.includes('專業測評') || c.slug.includes('專業測評'));
 
-        // 2. 抓取該分類的最新 4 篇文章
-        const response = await fetch(`https://mumpsaiweb.zeabur.app/wp-json/wp/v2/posts?_embed&per_page=4${catParam}`);
-        if (!response.ok) throw new Error('WordPress API 請求失敗');
-        
-        const data = await response.json();
-        
-        const formattedPosts = data.map((post: any) => ({
-          id: post.id,
-          title: post.title.rendered,
-          tag: post._embedded?.['wp:term']?.[0]?.[0]?.name || '小學堂',
-          description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 50) + '...',
-          image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || `https://picsum.photos/seed/wp-${post.id}/400/300`,
-          link: post.link
-        }));
-        
-        setAcademyArticles(formattedPosts);
+        // 2. 抓取小學堂文章
+        if (academyCat) {
+          const res = await fetch(`https://mumpsaiweb.zeabur.app/wp-json/wp/v2/posts?_embed&per_page=4&categories=${academyCat.id}&status=publish`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.length > 0) {
+              setAcademyArticles(data.map((post: any) => ({
+                id: post.id,
+                title: post.title.rendered,
+                tag: '小學堂',
+                description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 50) + '...',
+                image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || `https://picsum.photos/seed/wp-${post.id}/400/300`,
+                link: post.link
+              })));
+            }
+          }
+        }
         setLoadingArticles(false);
+
+        // 3. 抓取專業測評文章
+        if (reviewCat) {
+          const res = await fetch(`https://mumpsaiweb.zeabur.app/wp-json/wp/v2/posts?_embed&per_page=2&categories=${reviewCat.id}&status=publish`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.length > 0) {
+              setReviewArticles(data.map((post: any) => ({
+                id: post.id,
+                title: post.title.rendered,
+                tag: '專業測評',
+                description: post.excerpt.rendered.replace(/<[^>]*>?/gm, '').substring(0, 100) + '...',
+                image: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || `https://picsum.photos/seed/review-${post.id}/800/450`,
+                link: post.link
+              })));
+            }
+          }
+        }
+        setLoadingReviews(false);
+
       } catch (error) {
         console.error('WordPress Fetch Error:', error);
         setLoadingArticles(false);
+        setLoadingReviews(false);
       }
     };
 
-    fetchWordPressPosts();
+    fetchWordPressData();
   }, []);
 
   const displayArticles = academyArticles.length > 0 ? academyArticles : DEFAULT_ARTICLES;
+  const displayReviews = reviewArticles.length > 0 ? reviewArticles : DEFAULT_REVIEWS;
 
   return (
     <div className="min-h-screen bg-brand-cream font-serif selection:bg-brand-peach selection:text-brand-ink">
@@ -273,7 +303,7 @@ function AppContent() {
             <div className="aspect-[4/5] rounded-brand overflow-hidden shadow-2xl relative z-10">
               <img 
                 src="https://mumpsaiweb.zeabur.app/wp-content/uploads/2026/03/Gemini_Generated_Image_iq1hbkiq1hbkiq1h.png" 
-                alt="Happy cat playing" 
+                alt="Mumps Cat Care Hero" 
                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
                 referrerPolicy="no-referrer"
               />
@@ -361,45 +391,33 @@ function AppContent() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-12">
-            <div className="group cursor-pointer">
-              <div className="aspect-video rounded-brand overflow-hidden mb-6 relative">
-                <img 
-                  src="https://picsum.photos/seed/cat-toy-1/800/450" 
-                  alt="Cat toy review" 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-sans font-bold uppercase tracking-widest">
-                  熱門測評
+            {displayReviews.map((review, idx) => (
+              <a 
+                key={review.id || idx}
+                href={review.link || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group cursor-pointer block"
+              >
+                <div className="aspect-video rounded-brand overflow-hidden mb-6 relative">
+                  <img 
+                    src={review.image} 
+                    alt={review.title} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-sans font-bold uppercase tracking-widest">
+                    {review.tag}
+                  </div>
                 </div>
-              </div>
-              <h3 className="text-2xl font-sans font-bold mb-3 group-hover:text-brand-orange transition-colors">
-                2024 年度最佳互動式貓抓板：材質與耐用度深度解析
-              </h3>
-              <p className="text-gray-600 line-clamp-2">
-                我們測試了市面上 15 款熱銷貓抓板，從紙質密度到膠水安全性，為你找出 CP 值最高的那一款...
-              </p>
-            </div>
-
-            <div className="group cursor-pointer">
-              <div className="aspect-video rounded-brand overflow-hidden mb-6 relative">
-                <img 
-                  src="https://picsum.photos/seed/cat-toy-2/800/450" 
-                  alt="Cat toy review" 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-sans font-bold uppercase tracking-widest">
-                  行為學專欄
-                </div>
-              </div>
-              <h3 className="text-2xl font-sans font-bold mb-3 group-hover:text-brand-orange transition-colors">
-                如何挑選適合「高敏感貓」的躲藏空間？
-              </h3>
-              <p className="text-gray-600 line-clamp-2">
-                高敏感貓咪需要更強的安全感。本文將教你如何從材質、開口方向與高度來挑選貓窩...
-              </p>
-            </div>
+                <h3 className="text-2xl font-sans font-bold mb-3 group-hover:text-brand-orange transition-colors">
+                  {review.title}
+                </h3>
+                <p className="text-gray-600 line-clamp-2">
+                  {review.description}
+                </p>
+              </a>
+            ))}
           </div>
         </div>
       </section>
